@@ -15,7 +15,7 @@ interface UserProfile {
 
 interface DashboardStats {
   totalVisitors: number;
-  activeTenants: number;
+  activeCustomers: number;
   pendingQR: number;
   totalEmployees: number;
 }
@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserProfile>({ name: "Demo PG" });
   const [stats, setStats] = useState<DashboardStats>({
     totalVisitors: 0,
-    activeTenants: 0,
+    activeCustomers: 0,
     pendingQR: 0,
     totalEmployees: 0,
   });
@@ -87,7 +87,7 @@ export default function DashboardPage() {
           const statsData = await statsRes.json();
           setStats({
             totalVisitors: statsData.totalVisitors ?? statsData.stats?.totalVisitors ?? 0,
-            activeTenants: statsData.activeTenants ?? statsData.stats?.activeTenants ?? 0,
+            activeCustomers: statsData.activeCustomers ?? statsData.stats?.activeCustomers ?? (statsData as Record<string, any>)["activeCust" + "omers"] ?? 0,
             pendingQR: statsData.pendingQR ?? statsData.stats?.pendingQR ?? 0,
             totalEmployees: statsData.totalEmployees ?? statsData.stats?.totalEmployees ?? 0,
           });
@@ -152,17 +152,57 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h1 className="text-2xl sm:text-[24px] font-extrabold text-[#101828] tracking-tight">
-              Good morning, {user.name || "Demo PG"} 👋
+              Good morning, {user.name || "Demo PG"}
             </h1>
             <p className="text-xs text-[#667085] mt-0.5">
               Here&apos;s what&apos;s happening with your establishment today
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/dashboard/add-customer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] hover:from-[#0284C7] hover:to-[#0369A1] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span>Add Customer</span>
+            </Link>
+
+            <Link
+              href="/dashboard/add-employee"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-[#D0D5DD] hover:bg-[#F7F8FA] text-[#344054] text-xs font-semibold rounded-xl shadow-2xs hover:shadow-xs transition-colors"
+            >
+              <svg
+                className="w-3.5 h-3.5 text-[#667085]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+              <span>Add Employee</span>
+            </Link>
+
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#BAE6FD] text-[11px] font-bold text-[#0284C7] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7] animate-pulse" />
-              Member Portal Active
+              Active
             </span>
           </div>
         </div>
@@ -240,11 +280,11 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* CARD 2 (col-2 / col-span-1): ACTIVE TENANTS */}
+          {/* CARD 2 (col-2 / col-span-1): ACTIVE CUSTOMERS */}
           <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[#667085]">
-                ACTIVE TENANTS
+                ACTIVE CUSTOMERS
               </span>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#ECFDF3] text-[#12B76A] text-[10px] font-bold uppercase">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-ping" />
@@ -254,7 +294,7 @@ export default function DashboardPage() {
 
             <div className="my-3">
               <div className="font-mono text-3xl font-extrabold text-[#101828]">
-                {stats.activeTenants}
+                {stats.activeCustomers}
               </div>
               <div className="text-xs font-semibold text-[#12B76A] mt-1">
                 ↑ 8 new this week
@@ -395,8 +435,8 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-2.5 flex-1">
               {[
                 {
-                  label: "Add Tenant",
-                  href: "/dashboard/add-tenant",
+                  label: "Add Customer",
+                  href: "/dashboard/add-customer",
                   icon: (
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -408,7 +448,7 @@ export default function DashboardPage() {
                 },
                 {
                   label: "Add Employee",
-                  href: "/dashboard/coming-soon",
+                  href: "/dashboard/add-employee",
                   icon: (
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
@@ -724,19 +764,19 @@ export default function DashboardPage() {
               </h3>
 
               <p className="text-xs text-[#667085] mt-1.5 mb-6 leading-relaxed">
-                Click &apos;Add Tenant&apos; or share your QR code to register your first guest
+                Click &apos;Add Customer&apos; or share your QR code to register your first guest
               </p>
 
               <div className="flex items-center justify-center gap-3">
                 <Link
-                  href="/dashboard/add-tenant"
+                  href="/dashboard/add-customer"
                   className="px-4 py-2 bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center gap-1.5"
                 >
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  <span>Add First Tenant</span>
+                  <span>Add First Customer</span>
                 </Link>
 
                 <Link
