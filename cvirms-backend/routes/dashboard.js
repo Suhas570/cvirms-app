@@ -22,6 +22,7 @@ router.get('/stats', verifyToken, async (req, res) => {
     const stats = {
       totalVisitors: totalRes.rows[0]?.count || 0,
       activeTenants: activeRes.rows[0]?.count || 0,
+      activeCustomers: activeRes.rows[0]?.count || 0,
       pendingQR: pendingRes.rows[0]?.count || 0,
       totalEmployees: employeesRes.rows[0]?.count || 0,
     };

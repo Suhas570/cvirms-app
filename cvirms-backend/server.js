@@ -43,9 +43,15 @@ app.use(express.urlencoded({ extended: true }));
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const guestRoutes = require('./routes/guests');
+const employeeRoutes = require('./routes/employees');
+const foreignerRoutes = require('./routes/foreigners');
+const ocrRoutes = require('./routes/ocr');
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/guests', guestRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/foreigners', foreignerRoutes);
+app.use('/api/ocr', ocrRoutes);
 
 
 // Health Check Route
