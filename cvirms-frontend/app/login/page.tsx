@@ -2,12 +2,21 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  // Primary form state
+  // Auth Mode: "otp" | "password"
+  const [authTab, setAuthTab] = useState<"otp" | "password">("otp");
+
+  // Username + Password Form State
+  const [pwdUsername, setPwdUsername] = useState<string>("");
+  const [pwdPassword, setPwdPassword] = useState<string>("");
+  const [loadingPassword, setLoadingPassword] = useState<boolean>(false);
+
+  // Primary OTP form state
   const [identifier, setIdentifier] = useState<string>("9876543210");
   const [captchaAnswer, setCaptchaAnswer] = useState<string>("");
   const [captchaId, setCaptchaId] = useState<string>("");
@@ -225,6 +234,60 @@ export default function LoginPage() {
     }
   };
 
+  // Password-based Login handler
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+
+    const trimmedUser = pwdUsername.trim();
+    const trimmedPass = pwdPassword.trim();
+
+    if (!trimmedUser) {
+      setError("Please enter your Username or User ID.");
+      return;
+    }
+    if (!trimmedPass) {
+      setError("Please enter your password.");
+      return;
+    }
+
+    try {
+      setLoadingPassword(true);
+      const res = await fetch("http://localhost:5000/api/auth/login-username", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: trimmedUser,
+          password: trimmedPass,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Invalid username or password.");
+      }
+
+      // Persist auth tokens in localStorage
+      localStorage.setItem("cvirms_token", data.token);
+      localStorage.setItem("cvirms_user", JSON.stringify(data.user));
+
+      // Trigger custom storage event so active components update
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"));
+      }
+
+      // Redirect immediately to dashboard
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : "Authentication failed. Please check credentials.";
+      setError(errMsg);
+    } finally {
+      setLoadingPassword(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[#F7F8FA] selection:bg-[#0EA5E9] selection:text-white font-sans">
       {/* Decorative Full-Screen Radial Gradients */}
@@ -232,15 +295,7 @@ export default function LoginPage() {
       <div className="absolute -bottom-40 -right-40 w-[600px] h-[600px] rounded-full bg-gradient-to-tl from-[#F4EBFF] via-[#E9D5FF]/30 to-transparent blur-3xl pointer-events-none opacity-80" />
 
       {/* Centered Glassmorphism Authentication Card */}
-      <div
-        className="w-full max-w-[480px] relative z-10 p-8 sm:p-10 border border-white/60 shadow-lg animate-scale-in"
-        style={{
-          backgroundColor: "rgba(255, 255, 255, 0.85)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          borderRadius: "20px",
-        }}
-      >
+      <div className="w-full max-w-[480px] relative z-10 p-8 sm:p-10 bg-white/90 backdrop-blur-xl border border-white/80 rounded-2xl shadow-xl shadow-sky-900/5 animate-scale-in">
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-7">
           <div className="mb-3 transition-transform hover:scale-105">
@@ -267,6 +322,45 @@ export default function LoginPage() {
               Member Portal Authentication
             </span>
           </div>
+        </div>
+
+        {/* Tab Switcher: OTP vs Password */}
+        <div className="flex items-center p-1 bg-[#F2F4F7] rounded-xl mb-5 border border-[#EAECF0]">
+          <button
+            type="button"
+            onClick={() => {
+              setAuthTab("otp");
+              setError(null);
+            }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              authTab === "otp"
+                ? "bg-white text-[#0284C7] shadow-xs"
+                : "text-[#667085] hover:text-[#101828]"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+            <span>Login with OTP</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthTab("password");
+              setError(null);
+            }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              authTab === "password"
+                ? "bg-white text-[#0284C7] shadow-xs"
+                : "text-[#667085] hover:text-[#101828]"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>Login with Password</span>
+          </button>
         </div>
 
         {/* Global Error Alert Banner (Lucide SVG, NO emojis) */}
@@ -308,7 +402,8 @@ export default function LoginPage() {
         )}
 
         {/* ================= ALL-ON-FIRST-SCREEN AUTHENTICATION FLOW ================= */}
-        <div className="space-y-5">
+        {authTab === "otp" && (
+          <div className="space-y-5">
           {/* Section 1: Phone / User ID */}
           <div>
             <label
@@ -432,53 +527,92 @@ export default function LoginPage() {
 
           {/* Section 3: Send OTP Action Button */}
           {!otpSent && (
-            <button
-              type="button"
-              onClick={handleSendOtp}
-              disabled={loadingSendOtp || loadingCaptcha}
-              className="w-full py-3 px-6 rounded-xl text-white font-semibold text-sm bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 flex items-center justify-center gap-2"
-            >
-              {loadingSendOtp ? (
-                <>
-                  <svg
-                    className="w-4 h-4 animate-spin text-white"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
+            <>
+              <button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={loadingSendOtp || loadingCaptcha}
+                className="w-full flex items-center justify-center gap-2 text-white font-semibold text-[15px] rounded-[8px] transition-all duration-200 hover:-translate-y-px active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 cursor-pointer select-none shadow-[0_4px_12px_rgba(14,165,233,0.3)] hover:shadow-[0_6px_16px_rgba(14,165,233,0.4)]"
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9 0%, #0284C7 100%)",
+                  padding: "14px",
+                }}
+              >
+                {loadingSendOtp ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 animate-spin text-white"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v8H4z"
+                      />
+                    </svg>
+                    <span>Sending Secure OTP...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send OTP</span>
+                    <svg
+                      className="w-4 h-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
                       stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v8H4z"
-                    />
-                  </svg>
-                  <span>Sending Secure OTP...</span>
-                </>
-              ) : (
-                <>
-                  <span>Send OTP</span>
-                  <svg
-                    className="w-4 h-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </>
-              )}
-            </button>
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </>
+                )}
+              </button>
+
+              {/* OR Divider between Send OTP and Register buttons */}
+              <div className="my-5 flex items-center gap-3">
+                <div className="flex-1 h-px bg-[#EAECF0]" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#98A2B3]">
+                  OR
+                </span>
+                <div className="flex-1 h-px bg-[#EAECF0]" />
+              </div>
+
+              {/* Register Your Establishment Action Button (Dark Navy) */}
+              <Link
+                href="/register"
+                className="w-full flex items-center justify-center gap-2 text-white font-semibold text-[15px] rounded-[8px] transition-all duration-200 hover:-translate-y-px active:translate-y-0 cursor-pointer select-none shadow-[0_4px_12px_rgba(15,23,42,0.25)] hover:shadow-[0_8px_20px_rgba(15,23,42,0.35)]"
+                style={{
+                  background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                  padding: "14px",
+                }}
+              >
+                <span>Register Your Establishment</span>
+                <svg
+                  className="w-4 h-4 shrink-0 text-white"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </Link>
+            </>
           )}
 
           {/* ================= INLINE OTP ENTRY (REVEALED ON SAME CARD) ================= */}
@@ -610,10 +744,164 @@ export default function LoginPage() {
               </div>
             </div>
           )}
-        </div>
+          </div>
+        )}
+
+        {/* ================= TAB 2: USERNAME + PASSWORD LOGIN ================= */}
+        {authTab === "password" && (
+          <form onSubmit={handlePasswordLogin} className="space-y-4">
+            <div>
+              <label
+                htmlFor="pwd-username"
+                className="block text-[12px] font-semibold uppercase tracking-[0.04em] text-[#101828] mb-1.5"
+              >
+                Username or User ID
+              </label>
+              <div className="relative">
+                <input
+                  id="pwd-username"
+                  type="text"
+                  required
+                  value={pwdUsername}
+                  onChange={(e) => setPwdUsername(e.target.value)}
+                  placeholder="e.g. grandplaza4521 or demopg"
+                  className="w-full h-11 pl-10 pr-4 text-xs font-medium rounded-xl border border-[#D0D5DD] bg-white text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:border-[#0EA5E9] transition-all"
+                />
+                <div className="absolute left-3 top-3.5 text-[#98A2B3]">
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="pwd-password"
+                className="block text-[12px] font-semibold uppercase tracking-[0.04em] text-[#101828] mb-1.5"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="pwd-password"
+                  type="password"
+                  required
+                  value={pwdPassword}
+                  onChange={(e) => setPwdPassword(e.target.value)}
+                  placeholder="Enter your temporary or account password"
+                  className="w-full h-11 pl-10 pr-4 text-xs font-medium rounded-xl border border-[#D0D5DD] bg-white text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:border-[#0EA5E9] transition-all"
+                />
+                <div className="absolute left-3 top-3.5 text-[#98A2B3]">
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loadingPassword}
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] hover:from-[#0284C7] hover:to-[#0369A1] text-white text-xs font-bold shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              {loadingPassword ? (
+                <>
+                  <svg
+                    className="w-4 h-4 animate-spin text-white"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8H4z"
+                    />
+                  </svg>
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In with Password</span>
+                  <svg
+                    className="w-4 h-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                </>
+              )}
+            </button>
+
+            {/* OR Divider between Sign In and Register buttons */}
+            <div className="my-5 flex items-center gap-3">
+              <div className="flex-1 h-px bg-[#EAECF0]" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#98A2B3]">
+                OR
+              </span>
+              <div className="flex-1 h-px bg-[#EAECF0]" />
+            </div>
+
+            {/* Register Your Establishment Action Button (Dark Navy) */}
+            <Link
+              href="/register"
+              className="w-full flex items-center justify-center gap-2 text-white font-semibold text-[15px] rounded-[8px] transition-all duration-200 hover:-translate-y-px active:translate-y-0 cursor-pointer select-none shadow-[0_4px_12px_rgba(15,23,42,0.25)] hover:shadow-[0_8px_20px_rgba(15,23,42,0.35)]"
+              style={{
+                background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
+                padding: "14px",
+              }}
+            >
+              <span>Register Your Establishment</span>
+              <svg
+                className="w-4 h-4 shrink-0 text-white"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </Link>
+          </form>
+        )}
 
         {/* Security Footer Notice */}
-        <div className="mt-8 pt-4 border-t border-gray-200/60 text-center">
+        <div className="mt-6 pt-4 border-t border-gray-200/60 text-center">
           <p className="text-[10px] uppercase font-bold tracking-wider text-[#98A2B3]">
             Government of Karnataka • Police Department • E-Governance
           </p>

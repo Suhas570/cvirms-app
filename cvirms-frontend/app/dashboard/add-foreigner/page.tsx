@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility } from "@/lib/establishmentTypes";
 
 interface FormErrors {
   [key: string]: string;
@@ -10,6 +12,14 @@ interface FormErrors {
 
 export default function AddForeignerPage() {
   const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
+  const visibility = getModuleVisibility(user?.member_type);
+
+  useEffect(() => {
+    if (!userLoading && !visibility.foreigner) {
+      router.replace("/dashboard");
+    }
+  }, [userLoading, visibility.foreigner, router]);
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -154,6 +164,10 @@ export default function AddForeignerPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!userLoading && !visibility.foreigner) {
+    return null;
+  }
 
   return (
     <DashboardLayout>

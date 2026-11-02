@@ -15,12 +15,28 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     // Check for cvirms_token in localStorage on mount
     const token = typeof window !== "undefined" ? localStorage.getItem("cvirms_token") : null;
+    const userStr = typeof window !== "undefined" ? localStorage.getItem("cvirms_user") : null;
 
     if (!token) {
       setIsAuthenticated(false);
       setIsChecking(false);
       router.replace("/login");
     } else {
+      // Role gate: If an officer with role='police' tries to access member dashboard, redirect to police dashboard
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          if (user?.role === "police") {
+            setIsAuthenticated(false);
+            setIsChecking(false);
+            router.replace("/police/dashboard");
+            return;
+          }
+        } catch {
+          // Ignore json parse error
+        }
+      }
+
       setIsAuthenticated(true);
       setIsChecking(false);
     }

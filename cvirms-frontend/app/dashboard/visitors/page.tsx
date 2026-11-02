@@ -24,6 +24,17 @@ interface Visitor {
   gender?: string;
   coming_from?: string;
   going_to?: string;
+  customer_sub_type?: string | null;
+  item_description?: string | null;
+  item_weight?: string | number | null;
+  item_purity?: string | null;
+  item_amount?: string | number | null;
+  loan_amount?: string | number | null;
+  pledge_duration_days?: number | null;
+  vehicle_type?: string | null;
+  vehicle_registration?: string | null;
+  vehicle_make_model?: string | null;
+  remark?: string | null;
 }
 
 export default function VisitorListPage() {
@@ -190,9 +201,9 @@ export default function VisitorListPage() {
         </div>
 
         {/* Card Container */}
-        <div className="bg-white rounded-2xl border border-[#EAECF0] shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-xs overflow-hidden">
           {/* Card Header & Search Bar */}
-          <div className="p-5 border-b border-[#EAECF0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+          <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-[#101828]">
                 All Visitors
@@ -281,7 +292,7 @@ export default function VisitorListPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#F7F8FA] border-b border-[#EAECF0] text-[11px] font-bold text-[#667085] uppercase tracking-wider">
+                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                     <th className="py-3 px-4 w-10 text-center"> </th>
                     <th className="py-3 px-4">Visitor</th>
                     <th className="py-3 px-4">Contact</th>
@@ -291,27 +302,35 @@ export default function VisitorListPage() {
                     <th className="py-3 px-4">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#EAECF0] text-xs">
+                <tbody className="divide-y divide-gray-100 text-xs">
                   {visitors.map((visitor) => {
                     const isExpanded = expandedRows.has(visitor.id);
                     const isCheckedOut = Boolean(visitor.check_out_date);
-                    const isPendingQR = !isCheckedOut && !visitor.qr_code_string;
+                    const qr = visitor.qr_code_string;
+                    const isPendingQR = !isCheckedOut && qr === "PENDING";
+                    const isTokenCheckedIn =
+                      !isCheckedOut &&
+                      Boolean(qr && qr.length > 5 && qr !== "PENDING" && qr !== "REJECTED");
+                    const isManualEntry = !isCheckedOut && !qr;
+                    const isFromQR = Boolean(qr && qr.length > 0);
 
                     return (
                       <React.Fragment key={visitor.id}>
                         {/* Summary Clickable Row */}
                         <tr
                           onClick={() => toggleRow(visitor.id)}
-                          className="hover:bg-sky-50/40 cursor-pointer transition-colors group"
+                          className="hover:bg-gray-50/70 cursor-pointer transition-colors group"
                         >
                           {/* Chevron Icon (Rotates 90 deg) */}
                           <td className="py-3.5 px-4 text-center">
                             <span
-                              className={`inline-block transition-transform duration-200 text-[#98A2B3] group-hover:text-[#0284C7] ${
+                              className={`inline-flex items-center justify-center transition-transform duration-200 text-[#98A2B3] group-hover:text-[#0284C7] ${
                                 isExpanded ? "rotate-90 text-[#0284C7]" : ""
                               }`}
                             >
-                              ▶
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
                             </span>
                           </td>
 
@@ -322,9 +341,56 @@ export default function VisitorListPage() {
                                 {getInitials(visitor.guest_name)}
                               </div>
                               <div>
-                                <p className="font-bold text-[#101828] text-[13px] leading-tight">
-                                  {visitor.guest_name}
-                                </p>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-[#101828] text-[13px] leading-tight">
+                                    {visitor.guest_name}
+                                  </p>
+                                  {visitor.customer_sub_type && (
+                                    (() => {
+                                      const st = visitor.customer_sub_type.toLowerCase();
+                                      const isVehicleSeller =
+                                        st === "seller" &&
+                                        Boolean(visitor.vehicle_registration || visitor.vehicle_type);
+
+                                      let badgeClass = "bg-[#E0F2FE] text-[#0284C7] border-[#BAE6FD]"; // sky-blue for jewellery seller
+                                      let label = "SELLER";
+
+                                      if (st === "pledger") {
+                                        badgeClass = "bg-[#F9F5FF] text-[#6941C6] border-[#E9D7FE]"; // purple
+                                        label = "PLEDGER";
+                                      } else if (st === "buyer") {
+                                        badgeClass = "bg-[#ECFDF3] text-[#027A48] border-[#ABEFC6]"; // green
+                                        label = "BUYER";
+                                      } else if (isVehicleSeller) {
+                                        badgeClass = "bg-[#FEF6EE] text-[#B54708] border-[#F9DBAF]"; // amber
+                                        label = "SELLER";
+                                      }
+
+                                      return (
+                                        <span
+                                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-[0.05em] border ${badgeClass}`}
+                                        >
+                                          {label}
+                                        </span>
+                                      );
+                                    })()
+                                  )}
+                                  {isFromQR && (
+                                    <span
+                                      title={qr === "PENDING" ? "QR Self-Registration (Pending)" : `QR Token: ${qr}`}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]"
+                                    >
+                                      <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect width="5" height="5" x="3" y="3" rx="1" />
+                                        <rect width="5" height="5" x="16" y="3" rx="1" />
+                                        <rect width="5" height="5" x="3" y="16" rx="1" />
+                                        <path d="M21 16v5" />
+                                        <path d="M18.5 18.5h5" />
+                                      </svg>
+                                      <span>QR</span>
+                                    </span>
+                                  )}
+                                </div>
                                 <p className="text-[11px] font-mono text-[#667085]">
                                   {visitor.id_proof_type}: {visitor.id_proof_number}
                                 </p>
@@ -364,9 +430,13 @@ export default function VisitorListPage() {
                               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FFFAEB] text-[#B54708] border border-[#FEDF89]">
                                 Pending QR
                               </span>
-                            ) : (
+                            ) : isTokenCheckedIn ? (
                               <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#ECFDF3] text-[#027A48] border border-[#ABEFC6]">
                                 Checked In
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#EFF8FF] text-[#175CD3] border border-[#B2DDFF]">
+                                Manual Entry
                               </span>
                             )}
                           </td>
@@ -378,7 +448,7 @@ export default function VisitorListPage() {
                             <div
                               className={`transition-all duration-300 ease-in-out overflow-hidden bg-[#F7F8FA] ${
                                 isExpanded
-                                  ? "max-h-[500px] border-b border-[#EAECF0]"
+                                  ? "max-h-[900px] border-b border-[#EAECF0]"
                                   : "max-h-0"
                               }`}
                             >
@@ -450,6 +520,130 @@ export default function VisitorListPage() {
                                     </span>
                                   </div>
                                 </div>
+
+                                {/* Transaction & Sub-Type Records */}
+                                {visitor.customer_sub_type && (
+                                  <div className="mt-4 pt-3 border-t border-dashed border-[#EAECF0]">
+                                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#0284C7] mb-2.5 flex items-center gap-1.5">
+                                      <span>Transaction &amp; Sub-Type Records</span>
+                                      <span className="text-[#667085] font-semibold">
+                                        • {visitor.customer_sub_type.toUpperCase()}
+                                      </span>
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                      {visitor.item_description && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0] sm:col-span-2">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Item Description
+                                          </span>
+                                          <span className="font-semibold text-[#101828] mt-0.5 block">
+                                            {visitor.item_description}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.item_weight && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Item Weight
+                                          </span>
+                                          <span className="font-mono font-bold text-[#101828] mt-0.5 block">
+                                            {visitor.item_weight} grams
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.item_purity && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Purity
+                                          </span>
+                                          <span className="font-mono font-bold text-[#101828] mt-0.5 block">
+                                            {visitor.item_purity}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.loan_amount && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Loan Amount
+                                          </span>
+                                          <span className="font-mono font-bold text-[#6941C6] mt-0.5 block">
+                                            ₹{Number(visitor.loan_amount).toLocaleString("en-IN")}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.pledge_duration_days && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Pledge Duration
+                                          </span>
+                                          <span className="font-mono font-semibold text-[#101828] mt-0.5 block">
+                                            {visitor.pledge_duration_days} days
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.vehicle_type && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Vehicle Type
+                                          </span>
+                                          <span className="font-semibold text-[#101828] mt-0.5 block">
+                                            {visitor.vehicle_type}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.vehicle_registration && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Vehicle Registration
+                                          </span>
+                                          <span className="font-mono font-bold text-[#101828] mt-0.5 block">
+                                            {visitor.vehicle_registration}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.vehicle_make_model && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Make &amp; Model
+                                          </span>
+                                          <span className="font-semibold text-[#101828] mt-0.5 block">
+                                            {visitor.vehicle_make_model}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.item_amount && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0]">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Transaction Amount
+                                          </span>
+                                          <span className="font-mono font-bold text-[#027A48] mt-0.5 block">
+                                            ₹{Number(visitor.item_amount).toLocaleString("en-IN")}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {visitor.remark && (
+                                        <div className="p-3 bg-white rounded-xl border border-[#EAECF0] sm:col-span-2">
+                                          <span className="text-[#667085] text-[11px] block">
+                                            Remarks
+                                          </span>
+                                          <span className="font-medium text-[#475467] mt-0.5 block">
+                                            {visitor.remark}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>

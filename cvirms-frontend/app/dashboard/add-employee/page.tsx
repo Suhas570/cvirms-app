@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatAadhaar, isValidAadhaar } from "@/lib/aadhaar";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility } from "@/lib/establishmentTypes";
 
 interface FormErrors {
   [key: string]: string;
@@ -11,6 +13,14 @@ interface FormErrors {
 
 export default function AddEmployeePage() {
   const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
+  const visibility = getModuleVisibility(user?.member_type);
+
+  useEffect(() => {
+    if (!userLoading && !visibility.employee) {
+      router.replace("/dashboard");
+    }
+  }, [userLoading, visibility.employee, router]);
 
   const [formData, setFormData] = useState({
     full_name: "",
@@ -175,6 +185,10 @@ export default function AddEmployeePage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!userLoading && !visibility.employee) {
+    return null;
+  }
 
   return (
     <DashboardLayout>

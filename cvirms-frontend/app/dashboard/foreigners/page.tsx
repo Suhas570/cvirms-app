@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility } from "@/lib/establishmentTypes";
 
 interface Foreigner {
   id: number;
@@ -32,6 +35,15 @@ interface Foreigner {
 }
 
 export default function ForeignerListPage() {
+  const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
+  const visibility = getModuleVisibility(user?.member_type);
+
+  useEffect(() => {
+    if (!userLoading && !visibility.foreigner) {
+      router.replace("/dashboard");
+    }
+  }, [userLoading, visibility.foreigner, router]);
   const [foreigners, setForeigners] = useState<Foreigner[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -165,6 +177,10 @@ export default function ForeignerListPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (!userLoading && !visibility.foreigner) {
+    return null;
+  }
 
   return (
     <DashboardLayout>

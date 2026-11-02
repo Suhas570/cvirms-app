@@ -1,9 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import { formatAadhaar, isValidAadhaar } from "@/lib/aadhaar";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import {
+  getModuleVisibility,
+  getCustomerSubTypes,
+  CustomerSubTypeConfig,
+} from "@/lib/establishmentTypes";
 
 interface FormErrors {
   [key: string]: string;
@@ -11,6 +17,14 @@ interface FormErrors {
 
 export default function AddCustomerPage() {
   const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
+  const visibility = getModuleVisibility(user?.member_type);
+
+  useEffect(() => {
+    if (!userLoading && !visibility.customer) {
+      router.replace("/dashboard");
+    }
+  }, [userLoading, visibility.customer, router]);
 
   // Mode: "ocr" (Auto-Fill via Aadhaar OCR) or "manual" (Direct Manual Entry)
   const [entryMode, setEntryMode] = useState<"ocr" | "manual">("ocr");
@@ -49,6 +63,54 @@ export default function AddCustomerPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+
+  // Customer Sub-Types (Jewellery & Vehicle Dealer)
+  const subTypes = useMemo(() => {
+    return getCustomerSubTypes(user?.member_type);
+  }, [user?.member_type]);
+
+  const [customerSubType, setCustomerSubType] = useState<string>("");
+
+  useEffect(() => {
+    if (subTypes.length > 0) {
+      if (!customerSubType || !subTypes.some((st) => st.value === customerSubType)) {
+        setCustomerSubType(subTypes[0].value);
+      }
+    } else {
+      setCustomerSubType("");
+    }
+  }, [subTypes, customerSubType]);
+
+  const [subTypeData, setSubTypeData] = useState({
+    item_description: "",
+    item_weight: "",
+    item_purity: "22K",
+    item_amount: "",
+    loan_amount: "",
+    pledge_duration_days: "90",
+    vehicle_type: "4-Wheeler",
+    vehicle_registration: "",
+    vehicle_make_model: "",
+    remark: "",
+  });
+
+  const handleSubTypeChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    let val = value;
+    if (name === "vehicle_registration") {
+      val = value.toUpperCase();
+    }
+    setSubTypeData((prev) => ({ ...prev, [name]: val }));
+    if (errors[name]) {
+      setErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      });
+    }
+  };
 
   // Handle Form Input Change
   const handleChange = (
@@ -202,11 +264,58 @@ export default function AddCustomerPage() {
     ) {
       errs.id_proof_number = "Aadhaar number must be 12 valid digits";
     }
-    if (!formData.room_number.trim()) {
-      errs.room_number = "Room number is required";
+
+    // Room number required for standard establishment types (lodges, pg, etc.)
+    if (subTypes.length === 0) {
+      if (!formData.room_number.trim()) {
+        errs.room_number = "Room number is required";
+      }
     }
+
     if (!formData.check_in_date) {
       errs.check_in_date = "Check-in date is required";
+    }
+
+    // Extra sub-type field validation
+    if (subTypes.length > 0) {
+      const normalizedType = (user?.member_type || "")
+        .toLowerCase()
+        .trim()
+        .replace(/[\s-]+/g, "_");
+
+      if (normalizedType === "jewellery") {
+        if (!subTypeData.item_description.trim()) {
+          errs.item_description = "Item description is required";
+        }
+        if (!subTypeData.item_weight.trim()) {
+          errs.item_weight = "Weight is required";
+        }
+        if (!subTypeData.item_purity.trim()) {
+          errs.item_purity = "Purity is required";
+        }
+        if (customerSubType === "seller") {
+          if (!subTypeData.item_amount.trim()) {
+            errs.item_amount = "Amount is required";
+          }
+        } else if (customerSubType === "pledger") {
+          if (!subTypeData.loan_amount.trim()) {
+            errs.loan_amount = "Loan amount is required";
+          }
+        }
+      } else if (normalizedType === "vehicle_dealer") {
+        if (!subTypeData.vehicle_type.trim()) {
+          errs.vehicle_type = "Vehicle type is required";
+        }
+        if (!subTypeData.vehicle_registration.trim()) {
+          errs.vehicle_registration = "Vehicle registration number is required";
+        }
+        if (!subTypeData.vehicle_make_model.trim()) {
+          errs.vehicle_make_model = "Make & model is required";
+        }
+        if (!subTypeData.item_amount.trim()) {
+          errs.item_amount = "Amount is required";
+        }
+      }
     }
 
     setErrors(errs);
@@ -233,6 +342,11 @@ export default function AddCustomerPage() {
       const payload = {
         ...formData,
         id_proof_type: "Aadhaar Card",
+        room_number:
+          formData.room_number.trim() ||
+          (subTypes.length > 0 ? "Counter 1" : "101"),
+        customer_sub_type: subTypes.length > 0 ? customerSubType : null,
+        ...(subTypes.length > 0 ? subTypeData : {}),
       };
 
       const response = await fetch("http://localhost:5000/api/guests", {
@@ -267,6 +381,10 @@ export default function AddCustomerPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!userLoading && !visibility.customer) {
+    return null;
+  }
 
   return (
     <DashboardLayout>
@@ -306,7 +424,7 @@ export default function AddCustomerPage() {
           </div>
 
           {/* Mode Switcher: OCR Scan vs Manual */}
-          <div className="flex items-center p-1 bg-[#F2F4F7] rounded-xl border border-[#D0D5DD] self-start sm:self-auto shadow-2xs">
+          <div className="flex items-center p-1 bg-[#F2F4F7] rounded-xl border border-[#D0D5DD] self-start sm:self-auto shadow-xs">
             <button
               type="button"
               onClick={() => setEntryMode("ocr")}
@@ -378,6 +496,49 @@ export default function AddCustomerPage() {
           </div>
         )}
 
+        {/* CUSTOMER SUB-TYPE SELECTOR (Jewellery / Vehicle Dealer) */}
+        {subTypes.length > 0 && (
+          <div className="bg-white rounded-2xl border border-[#EAECF0] shadow-sm p-5 space-y-3 animate-fade-in">
+            <div className="flex items-center gap-2 text-[#0284C7]">
+              <svg
+                className="w-4 h-4 shrink-0 text-[#0284C7]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </svg>
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#667085]">
+                Customer Type
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+              {subTypes.map((st) => {
+                const isActive = customerSubType === st.value;
+                return (
+                  <button
+                    key={st.value}
+                    type="button"
+                    onClick={() => setCustomerSubType(st.value)}
+                    className={`w-full py-3 px-4 rounded-xl text-[14px] font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+                      isActive
+                        ? "bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] text-white shadow-md shadow-[#0EA5E9]/25 cursor-default"
+                        : "bg-white border border-[#D0D5DD] text-[#101828] hover:bg-[#F7F8FA] hover:border-[#98A2B3]"
+                    }`}
+                  >
+                    <span>{st.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* OPTIONAL OCR SECTION (SHOWN ONLY WHEN OCR MODE IS ACTIVE) */}
         {entryMode === "ocr" ? (
           <div className="bg-gradient-to-b from-[#F0F9FF] to-white rounded-2xl border border-[#BAE6FD] shadow-xs p-6 space-y-5 animate-fade-in">
@@ -438,7 +599,7 @@ export default function AddCustomerPage() {
                   Front Side (Identity & Photo)
                 </label>
                 {frontPreview ? (
-                  <div className="relative border border-[#B9E6FE] bg-white rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+                  <div className="relative border border-[#B9E6FE] bg-white rounded-xl p-3 flex items-center gap-3 shadow-xs">
                     <img
                       src={frontPreview}
                       alt="Aadhaar Front Preview"
@@ -502,7 +663,7 @@ export default function AddCustomerPage() {
                   Back Side (Address & QR Code)
                 </label>
                 {backPreview ? (
-                  <div className="relative border border-[#B9E6FE] bg-white rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+                  <div className="relative border border-[#B9E6FE] bg-white rounded-xl p-3 flex items-center gap-3 shadow-xs">
                     <img
                       src={backPreview}
                       alt="Aadhaar Back Preview"
@@ -617,7 +778,7 @@ export default function AddCustomerPage() {
 
             {/* OCR Success Banner */}
             {ocrSuccess && (
-              <div className="p-3.5 bg-[#ECFDF3] border border-[#A6F4C5] rounded-xl flex items-start gap-2.5 text-[#027A48] text-xs shadow-2xs animate-fadeIn">
+              <div className="p-3.5 bg-[#ECFDF3] border border-[#A6F4C5] rounded-xl flex items-start gap-2.5 text-[#027A48] text-xs shadow-xs animate-fadeIn">
                 <svg
                   className="w-4 h-4 text-[#12B76A] shrink-0 mt-0.5"
                   viewBox="0 0 24 24"
@@ -639,7 +800,7 @@ export default function AddCustomerPage() {
 
             {/* OCR Error Banner */}
             {ocrError && (
-              <div className="p-3.5 bg-[#FEF3F2] border border-[#FECDCA] rounded-xl flex items-start gap-2.5 text-[#B42318] text-xs shadow-2xs animate-fadeIn">
+              <div className="p-3.5 bg-[#FEF3F2] border border-[#FECDCA] rounded-xl flex items-start gap-2.5 text-[#B42318] text-xs shadow-xs animate-fadeIn">
                 <svg
                   className="w-4 h-4 text-[#D92D20] shrink-0 mt-0.5"
                   viewBox="0 0 24 24"
@@ -662,7 +823,7 @@ export default function AddCustomerPage() {
           </div>
         ) : (
           /* MANUAL MODE INFO BANNER */
-          <div className="p-4 bg-[#F8FAFC] border border-[#EAECF0] rounded-xl flex items-center justify-between text-xs text-[#475467] shadow-2xs animate-fade-in">
+          <div className="p-4 bg-[#F8FAFC] border border-[#EAECF0] rounded-xl flex items-center justify-between text-xs text-[#475467] shadow-xs animate-fade-in">
             <div className="flex items-center gap-2">
               <svg
                 className="w-4 h-4 text-[#0284C7] shrink-0"
@@ -1043,6 +1204,322 @@ export default function AddCustomerPage() {
                 </select>
               </div>
             </div>
+
+            {/* SECTION 4: SUB-TYPE TRANSACTION DETAILS (JEWELLERY / VEHICLE DEALER) */}
+            {subTypes.length > 0 && (
+              <>
+                <div className="border-t border-dashed border-[#EAECF0]" />
+
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center gap-2 pb-2 text-[#0284C7]">
+                    {/* Diamond icon for Jewellery, Car icon for Vehicle Dealer */}
+                    {user?.member_type === "jewellery" ? (
+                      <svg
+                        className="w-4 h-4 shrink-0"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M6 3h12l4 6-10 12L2 9z" />
+                        <path d="M11 3 8 9l4 12 4-12-3-6" />
+                        <path d="M2 9h20" />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="w-4 h-4 shrink-0"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+                        <circle cx="7" cy="17" r="2" />
+                        <path d="M9 17h6" />
+                        <circle cx="17" cy="17" r="2" />
+                      </svg>
+                    )}
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#101828]">
+                      {user?.member_type === "jewellery"
+                        ? "Jewellery Details"
+                        : "Vehicle Details"}
+                    </h2>
+                  </div>
+
+                  {/* JEWELLERY FIELDS */}
+                  {user?.member_type === "jewellery" && (
+                    <div className="space-y-4">
+                      {/* Item Description */}
+                      <div>
+                        <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                          Item Description <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          name="item_description"
+                          value={subTypeData.item_description}
+                          onChange={handleSubTypeChange}
+                          placeholder="e.g., 22K Gold necklace with emerald pendant, floral pattern"
+                          className={`w-full px-3.5 py-2 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                            errors.item_description
+                              ? "border-red-400 focus:border-red-500"
+                              : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                          }`}
+                        />
+                        {errors.item_description && (
+                          <p className="mt-1 text-[12px] text-red-500 font-medium">
+                            {errors.item_description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Weight | Purity | (Amount OR Loan Amount + Duration) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Weight (grams) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            name="item_weight"
+                            value={subTypeData.item_weight}
+                            onChange={handleSubTypeChange}
+                            placeholder="e.g., 24.50"
+                            className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                              errors.item_weight
+                                ? "border-red-400 focus:border-red-500"
+                                : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                            }`}
+                          />
+                          {errors.item_weight && (
+                            <p className="mt-1 text-[12px] text-red-500 font-medium">
+                              {errors.item_weight}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Purity <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="item_purity"
+                            value={subTypeData.item_purity}
+                            onChange={handleSubTypeChange}
+                            className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#D0D5DD] rounded-lg text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-all"
+                          >
+                            <option value="24K">24K (99.9%)</option>
+                            <option value="22K">22K (91.6%)</option>
+                            <option value="18K">18K (75.0%)</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        {/* Seller: Amount | Pledger: Loan Amount */}
+                        {customerSubType === "seller" ? (
+                          <div>
+                            <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                              Amount (₹) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              name="item_amount"
+                              value={subTypeData.item_amount}
+                              onChange={handleSubTypeChange}
+                              placeholder="e.g., 145000"
+                              className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                                errors.item_amount
+                                  ? "border-red-400 focus:border-red-500"
+                                  : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                              }`}
+                            />
+                            {errors.item_amount && (
+                              <p className="mt-1 text-[12px] text-red-500 font-medium">
+                                {errors.item_amount}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                              Loan Amount (₹) <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              name="loan_amount"
+                              value={subTypeData.loan_amount}
+                              onChange={handleSubTypeChange}
+                              placeholder="e.g., 100000"
+                              className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                                errors.loan_amount
+                                  ? "border-red-400 focus:border-red-500"
+                                  : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                              }`}
+                            />
+                            {errors.loan_amount && (
+                              <p className="mt-1 text-[12px] text-red-500 font-medium">
+                                {errors.loan_amount}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* If Pledger: Pledge Duration Row */}
+                      {customerSubType === "pledger" && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                              Pledge Duration (days)
+                            </label>
+                            <input
+                              type="number"
+                              name="pledge_duration_days"
+                              value={subTypeData.pledge_duration_days}
+                              onChange={handleSubTypeChange}
+                              placeholder="e.g., 90"
+                              className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#D0D5DD] rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-all"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Remark */}
+                      <div>
+                        <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                          Remark
+                        </label>
+                        <textarea
+                          rows={2}
+                          name="remark"
+                          value={subTypeData.remark}
+                          onChange={handleSubTypeChange}
+                          placeholder="e.g., Stone weight deduction 1.2g, hallmark verified"
+                          className="w-full px-3.5 py-2 text-xs bg-white border border-[#D0D5DD] rounded-lg text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VEHICLE DEALER FIELDS */}
+                  {user?.member_type === "vehicle_dealer" && (
+                    <div className="space-y-4">
+                      {/* Vehicle Type | Registration | Make & Model */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Vehicle Type <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            name="vehicle_type"
+                            value={subTypeData.vehicle_type}
+                            onChange={handleSubTypeChange}
+                            className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#D0D5DD] rounded-lg text-[#101828] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-all"
+                          >
+                            <option value="2-Wheeler">2-Wheeler</option>
+                            <option value="4-Wheeler">4-Wheeler</option>
+                            <option value="Commercial">Commercial</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Vehicle Registration Number <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            name="vehicle_registration"
+                            value={subTypeData.vehicle_registration}
+                            onChange={handleSubTypeChange}
+                            placeholder="e.g., KA 01 AB 1234"
+                            className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                              errors.vehicle_registration
+                                ? "border-red-400 focus:border-red-500"
+                                : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                            }`}
+                          />
+                          {errors.vehicle_registration && (
+                            <p className="mt-1 text-[12px] text-red-500 font-medium">
+                              {errors.vehicle_registration}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Make &amp; Model <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            name="vehicle_make_model"
+                            value={subTypeData.vehicle_make_model}
+                            onChange={handleSubTypeChange}
+                            placeholder="e.g., Honda City ZX 2022"
+                            className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                              errors.vehicle_make_model
+                                ? "border-red-400 focus:border-red-500"
+                                : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                            }`}
+                          />
+                          {errors.vehicle_make_model && (
+                            <p className="mt-1 text-[12px] text-red-500 font-medium">
+                              {errors.vehicle_make_model}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Amount */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                            Amount (₹) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            name="item_amount"
+                            value={subTypeData.item_amount}
+                            onChange={handleSubTypeChange}
+                            placeholder="e.g., 650000"
+                            className={`w-full px-3.5 py-2.5 text-xs bg-white border rounded-lg text-[#101828] placeholder-[#98A2B3] font-mono focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 transition-all ${
+                              errors.item_amount
+                                ? "border-red-400 focus:border-red-500"
+                                : "border-[#D0D5DD] focus:border-[#0EA5E9]"
+                            }`}
+                          />
+                          {errors.item_amount && (
+                            <p className="mt-1 text-[12px] text-red-500 font-medium">
+                              {errors.item_amount}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Remark */}
+                      <div>
+                        <label className="block text-[12px] font-semibold uppercase text-[#101828] mb-1.5">
+                          Remark
+                        </label>
+                        <textarea
+                          rows={2}
+                          name="remark"
+                          value={subTypeData.remark}
+                          onChange={handleSubTypeChange}
+                          placeholder="e.g., First owner, insurance valid till Nov 2027, NOC issued"
+                          className="w-full px-3.5 py-2 text-xs bg-white border border-[#D0D5DD] rounded-lg text-[#101828] placeholder-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#0EA5E9]/20 focus:border-[#0EA5E9] transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* DASHED DIVIDER */}
             <div className="border-t border-dashed border-[#EAECF0]" />

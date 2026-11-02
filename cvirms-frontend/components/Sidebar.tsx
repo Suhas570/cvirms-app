@@ -4,6 +4,8 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility, getEstablishmentLabel } from "@/lib/establishmentTypes";
 
 interface UserData {
   name: string;
@@ -16,28 +18,44 @@ interface UserData {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { user: currentUser } = useCurrentUser();
 
   const [user, setUser] = useState<UserData>({
     name: "Demo PG",
     member_type: "pg",
   });
+  const activeUser = currentUser || user;
+  const visibility = getModuleVisibility(activeUser?.member_type);
+  const establishmentLabel = getEstablishmentLabel(activeUser?.member_type);
+  const managerTitle = `${establishmentLabel} Manager`;
+
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  // Safely read user from localStorage.getItem('cvirms_user')
+  // Safely read user from localStorage.getItem('cvirms_user') and listen for updates
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("cvirms_user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && typeof parsed === "object") {
-          setUser(parsed);
+    const readUser = () => {
+      try {
+        const stored = localStorage.getItem("cvirms_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === "object") {
+            setUser(parsed);
+          }
         }
+      } catch {
+        // Fallback
       }
-    } catch {
-      // Fallback
-    }
+    };
+
+    readUser();
+    window.addEventListener("storage", readUser);
+    window.addEventListener("user-profile-updated", readUser);
+    return () => {
+      window.removeEventListener("storage", readUser);
+      window.removeEventListener("user-profile-updated", readUser);
+    };
   }, []);
 
   // Close mobile sidebar on route change
@@ -83,6 +101,62 @@ export default function Sidebar() {
       // Ignore
     }
     router.push("/login");
+  };
+
+  const handleProfileClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDropdownOpen(false);
+    if (pathname === "/dashboard/profile") {
+      const main = document.querySelector("main");
+      if (main) {
+        main.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      router.push("/dashboard/profile");
+    }
+  };
+
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDropdownOpen(false);
+    if (pathname === "/dashboard/profile") {
+      const el = document.getElementById("settings-section");
+      if (el) {
+        const main = el.closest("main");
+        if (main) {
+          const mainRect = main.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const targetScroll = main.scrollTop + (elRect.top - mainRect.top) - 80;
+          main.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+        }
+        window.scrollTo({ top: el.offsetTop - 80, behavior: "smooth" });
+      }
+      window.history.pushState(null, "", "#settings-section");
+    } else {
+      router.push("/dashboard/profile#settings-section");
+    }
+  };
+
+  const handleHelpClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDropdownOpen(false);
+    if (pathname === "/dashboard/profile") {
+      const el = document.getElementById("help-section");
+      if (el) {
+        const main = el.closest("main");
+        if (main) {
+          const mainRect = main.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const targetScroll = main.scrollTop + (elRect.top - mainRect.top) - 80;
+          main.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+        }
+        window.scrollTo({ top: el.offsetTop - 80, behavior: "smooth" });
+      }
+      window.history.pushState(null, "", "#help-section");
+    } else {
+      router.push("/dashboard/profile#help-section");
+    }
   };
 
   // Derive avatar initial:
@@ -146,107 +220,127 @@ export default function Sidebar() {
     {
       label: "REGISTRATION",
       items: [
-        {
-          name: "Add Customer",
-          href: "/dashboard/add-customer",
-          icon: (
-            <svg
-              className="w-4 h-4 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" x2="19" y1="8" y2="14" />
-              <line x1="22" x2="16" y1="11" y2="11" />
-            </svg>
-          ),
-        },
-        {
-          name: "Add Employee",
-          href: "/dashboard/add-employee",
-          icon: (
-            <svg
-              className="w-4 h-4 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-            </svg>
-          ),
-        },
-        {
-          name: "Add Foreigner",
-          href: "/dashboard/add-foreigner",
-          icon: (
-            <svg
-              className="w-4 h-4 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" x2="22" y1="12" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          ),
-        },
+        ...(visibility.customer
+          ? [
+              {
+                name: "Add Customer",
+                href: "/dashboard/add-customer",
+                icon: (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <line x1="19" x2="19" y1="8" y2="14" />
+                    <line x1="22" x2="16" y1="11" y2="11" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
+        ...(visibility.employee
+          ? [
+              {
+                name: "Add Employee",
+                href: "/dashboard/add-employee",
+                icon: (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
+        ...(visibility.foreigner
+          ? [
+              {
+                name: "Add Foreigner",
+                href: "/dashboard/add-foreigner",
+                icon: (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" x2="22" y1="12" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
       ],
     },
     {
       label: "LISTS",
       items: [
-        {
-          name: "Employee List",
-          href: "/dashboard/employees",
-          icon: (
-            <svg
-              className="w-4 h-4 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          ),
-        },
-        {
-          name: "Foreigner List",
-          href: "/dashboard/foreigners",
-          icon: (
-            <svg
-              className="w-4 h-4 shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" />
-              <path d="M6 6h10" />
-              <path d="M6 10h10" />
-            </svg>
-          ),
-        },
+        ...(visibility.employee
+          ? [
+              {
+                name: "Employee List",
+                href: "/dashboard/employees",
+                icon: (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
+        ...(visibility.foreigner
+          ? [
+              {
+                name: "Foreigner List",
+                href: "/dashboard/foreigners",
+                icon: (
+                  <svg
+                    className="w-4 h-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" />
+                    <path d="M6 6h10" />
+                    <path d="M6 10h10" />
+                  </svg>
+                ),
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -254,7 +348,7 @@ export default function Sidebar() {
       items: [
         {
           name: "QR Approvals",
-          href: "/dashboard/coming-soon",
+          href: "/dashboard/qr-pending",
           icon: (
             <svg
               className="w-4 h-4 shrink-0"
@@ -274,7 +368,7 @@ export default function Sidebar() {
         },
         {
           name: "Generate QR",
-          href: "/dashboard/coming-soon",
+          href: "/dashboard/generate-qr",
           icon: (
             <svg
               className="w-4 h-4 shrink-0"
@@ -295,7 +389,7 @@ export default function Sidebar() {
         },
         {
           name: "Notices",
-          href: "/dashboard/coming-soon",
+          href: "/dashboard/notices",
           icon: (
             <svg
               className="w-4 h-4 shrink-0"
@@ -313,7 +407,7 @@ export default function Sidebar() {
         },
       ],
     },
-  ];
+  ].filter((group) => group.items.length > 0);
 
   return (
     <>
@@ -492,10 +586,10 @@ export default function Sidebar() {
                       <Link
                         key={item.name}
                         href={item.href}
-                        className={`group relative flex items-center gap-3 px-3 py-2 text-xs rounded-lg active:scale-[0.98] ${
+                        className={`group relative flex items-center gap-3 px-3 py-2.5 text-xs rounded-xl active:scale-[0.98] ${
                           isActive
-                            ? "bg-[#E0F2FE] text-[#0284C7] font-semibold"
-                            : "text-[#667085] hover:bg-[#F1F5F9] hover:translate-x-[2px] font-medium"
+                            ? "bg-[#F0F9FF] text-[#0284C7] font-semibold"
+                            : "text-[#475467] hover:bg-[#F8FAFC] hover:translate-x-[2px] font-medium"
                         }`}
                         style={{
                           transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -595,18 +689,18 @@ export default function Sidebar() {
                 {/* User Info Header */}
                 <div className="px-3 py-2 border-b border-[#EAECF0] mb-1">
                   <p className="font-bold text-[#101828] truncate">
-                    {user.name || "Demo PG"}
+                    {activeUser.name || "Demo Establishment"}
                   </p>
                   <p className="text-[11px] text-[#667085] truncate font-medium">
-                    Hotel Manager
+                    {managerTitle}
                   </p>
                 </div>
 
                 {/* Profile Item */}
-                <Link
-                  href="/dashboard/coming-soon"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors"
+                <button
+                  type="button"
+                  onClick={handleProfileClick}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors text-left cursor-pointer"
                 >
                   <svg
                     className="w-4 h-4 text-[#667085]"
@@ -621,13 +715,13 @@ export default function Sidebar() {
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                   <span className="font-medium text-xs">Profile</span>
-                </Link>
+                </button>
 
                 {/* Settings Item */}
-                <Link
-                  href="/dashboard/coming-soon"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors"
+                <button
+                  type="button"
+                  onClick={handleSettingsClick}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors text-left cursor-pointer"
                 >
                   <svg
                     className="w-4 h-4 text-[#667085]"
@@ -642,13 +736,13 @@ export default function Sidebar() {
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>
                   <span className="font-medium text-xs">Settings</span>
-                </Link>
+                </button>
 
                 {/* Help Item */}
-                <Link
-                  href="/dashboard/coming-soon"
-                  onClick={() => setDropdownOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors"
+                <button
+                  type="button"
+                  onClick={handleHelpClick}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[#344054] hover:bg-[#F7F8FA] hover:text-[#101828] transition-colors text-left cursor-pointer"
                 >
                   <svg
                     className="w-4 h-4 text-[#667085]"
@@ -664,7 +758,7 @@ export default function Sidebar() {
                     <line x1="12" y1="17" x2="12.01" y2="17" />
                   </svg>
                   <span className="font-medium text-xs">Help</span>
-                </Link>
+                </button>
 
                 {/* Separator Line */}
                 <div className="border-t border-[#EAECF0] my-1" />
@@ -706,16 +800,16 @@ export default function Sidebar() {
                   background: "linear-gradient(135deg, #7F56D9, #EE46BC)",
                 }}
               >
-                {getAvatarInitial(user?.name)}
+                {getAvatarInitial(activeUser?.name)}
               </div>
 
-              {/* User Name (13px weight 700, #101828) + Hotel Manager (11px, #667085) */}
+              {/* User Name (13px weight 700, #101828) + Manager Title */}
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-bold text-[#101828] truncate leading-tight">
-                  {user.name || "Demo PG"}
+                  {activeUser.name || "Demo Establishment"}
                 </p>
                 <p className="text-[11px] text-[#667085] truncate leading-tight">
-                  Hotel Manager
+                  {managerTitle}
                 </p>
               </div>
 

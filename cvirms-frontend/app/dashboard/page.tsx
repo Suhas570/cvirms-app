@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility } from "@/lib/establishmentTypes";
 
 interface UserProfile {
   id?: number;
@@ -16,13 +18,18 @@ interface UserProfile {
 interface DashboardStats {
   totalVisitors: number;
   activeCustomers: number;
+  activeTenants?: number;
   pendingQR: number;
   totalEmployees: number;
+  totalForeigners?: number;
+  totalVisitorsWithQr?: number;
+  complianceScore?: number;
+  weeklyCheckins?: Array<{ day_name: string; day_date: string; count: number }>;
 }
 
 interface ActivityItem {
-  id: number;
-  type: "checkin" | "checkout" | "qr_approved" | "employee_added" | "foreigner_registered";
+  id: string | number;
+  type: string;
   name: string;
   detail: string;
   timestamp: string;
@@ -46,7 +53,11 @@ interface VisitorRecord {
 }
 
 export default function DashboardPage() {
+  const { user: currentUser } = useCurrentUser();
   const [user, setUser] = useState<UserProfile>({ name: "Demo PG" });
+  const activeUser = currentUser || user;
+  const visibility = getModuleVisibility(activeUser?.member_type);
+
   const [stats, setStats] = useState<DashboardStats>({
     totalVisitors: 0,
     activeCustomers: 0,
@@ -87,9 +98,13 @@ export default function DashboardPage() {
           const statsData = await statsRes.json();
           setStats({
             totalVisitors: statsData.totalVisitors ?? statsData.stats?.totalVisitors ?? 0,
-            activeCustomers: statsData.activeCustomers ?? statsData.stats?.activeCustomers ?? (statsData as Record<string, any>)["activeCust" + "omers"] ?? 0,
+            activeCustomers: statsData.activeCustomers ?? statsData.stats?.activeCustomers ?? statsData.activeTenants ?? 0,
             pendingQR: statsData.pendingQR ?? statsData.stats?.pendingQR ?? 0,
             totalEmployees: statsData.totalEmployees ?? statsData.stats?.totalEmployees ?? 0,
+            totalForeigners: statsData.totalForeigners ?? statsData.stats?.totalForeigners ?? 0,
+            totalVisitorsWithQr: statsData.totalVisitorsWithQr ?? statsData.stats?.totalVisitorsWithQr ?? 0,
+            complianceScore: statsData.complianceScore ?? statsData.stats?.complianceScore ?? 0,
+            weeklyCheckins: statsData.weeklyCheckins ?? statsData.stats?.weeklyCheckins ?? [],
           });
         }
 
@@ -101,10 +116,22 @@ export default function DashboardPage() {
           setVisitors(list);
         }
 
-        // Fetch Activity
-        const actRes = await fetch(`${API_BASE}/api/dashboard/activity`, { headers: authHeaders });
-        if (actRes.ok) {
-          const actData = await actRes.json();
+        // Fetch Activity (Try recent-activity first)
+        let actData: any = null;
+        try {
+          const actRes = await fetch(`${API_BASE}/api/dashboard/recent-activity`, { headers: authHeaders });
+          if (actRes.ok) {
+            actData = await actRes.json();
+          } else {
+            const actRes2 = await fetch(`${API_BASE}/api/dashboard/activity`, { headers: authHeaders });
+            if (actRes2.ok) actData = await actRes2.json();
+          }
+        } catch {
+          const actRes2 = await fetch(`${API_BASE}/api/dashboard/activity`, { headers: authHeaders });
+          if (actRes2.ok) actData = await actRes2.json();
+        }
+
+        if (actData) {
           const list = Array.isArray(actData) ? actData : actData.activities || actData.activity || [];
           setActivities(list);
         }
@@ -160,45 +187,49 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Link
-              href="/dashboard/add-customer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] hover:from-[#0284C7] hover:to-[#0369A1] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {visibility.customer && (
+              <Link
+                href="/dashboard/add-customer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] hover:from-[#0284C7] hover:to-[#0369A1] text-white text-xs font-bold rounded-xl shadow-xs hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
               >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Add Customer</span>
-            </Link>
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Add Customer</span>
+              </Link>
+            )}
 
-            <Link
-              href="/dashboard/add-employee"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-[#D0D5DD] hover:bg-[#F7F8FA] text-[#344054] text-xs font-semibold rounded-xl shadow-2xs hover:shadow-xs transition-colors"
-            >
-              <svg
-                className="w-3.5 h-3.5 text-[#667085]"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {visibility.employee && (
+              <Link
+                href="/dashboard/add-employee"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-[#D0D5DD] hover:bg-[#F7F8FA] text-[#344054] text-xs font-semibold rounded-xl shadow-xs hover:shadow-sm transition-all"
               >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <line x1="19" y1="8" x2="19" y2="14" />
-                <line x1="22" y1="11" x2="16" y2="11" />
-              </svg>
-              <span>Add Employee</span>
-            </Link>
+                <svg
+                  className="w-3.5 h-3.5 text-[#667085]"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <line x1="19" y1="8" x2="19" y2="14" />
+                  <line x1="22" y1="11" x2="16" y2="11" />
+                </svg>
+                <span>Add Employee</span>
+              </Link>
+            )}
 
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E0F2FE] border border-[#BAE6FD] text-[11px] font-bold text-[#0284C7] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7] animate-pulse" />
@@ -281,30 +312,32 @@ export default function DashboardPage() {
           </div>
 
           {/* CARD 2 (col-2 / col-span-1): ACTIVE CUSTOMERS */}
-          <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[#667085]">
-                ACTIVE CUSTOMERS
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#ECFDF3] text-[#12B76A] text-[10px] font-bold uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-ping" />
-                Live
-              </span>
-            </div>
-
-            <div className="my-3">
-              <div className="font-mono text-3xl font-extrabold text-[#101828]">
-                {stats.activeCustomers}
+          {visibility.customer && (
+            <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[#667085]">
+                  ACTIVE CUSTOMERS
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#ECFDF3] text-[#12B76A] text-[10px] font-bold uppercase">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A] animate-ping" />
+                  Live
+                </span>
               </div>
-              <div className="text-xs font-semibold text-[#12B76A] mt-1">
-                ↑ 8 new this week
-              </div>
-            </div>
 
-            <p className="text-[11px] text-[#667085]">
-              Currently residing with valid check-in
-            </p>
-          </div>
+              <div className="my-3">
+                <div className="font-mono text-3xl font-extrabold text-[#101828]">
+                  {stats.activeCustomers}
+                </div>
+                <div className="text-xs font-semibold text-[#12B76A] mt-1">
+                  ↑ 8 new this week
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#667085]">
+                Currently residing with valid check-in
+              </p>
+            </div>
+          )}
 
           {/* CARD 3 (col-2 / col-span-1): PENDING QR */}
           <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
@@ -337,6 +370,62 @@ export default function DashboardPage() {
             </p>
           </div>
 
+          {/* CARD: TOTAL EMPLOYEES */}
+          {visibility.employee && (
+            <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[#667085]">
+                  TOTAL EMPLOYEES
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#ECFDF3] text-[#12B76A] text-[10px] font-bold uppercase">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#12B76A]" />
+                  Staff
+                </span>
+              </div>
+
+              <div className="my-3">
+                <div className="font-mono text-3xl font-extrabold text-[#101828]">
+                  {stats.totalEmployees}
+                </div>
+                <div className="text-xs font-semibold text-[#0284C7] mt-1">
+                  Active staff on roll
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#667085]">
+                Verified establishment personnel
+              </p>
+            </div>
+          )}
+
+          {/* CARD: FOREIGNERS */}
+          {visibility.foreigner && (
+            <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-[0.05em] text-[#667085]">
+                  FOREIGNERS
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#EFF8FF] text-[#175CD3] border border-[#B2DDFF] text-[10px] font-bold uppercase">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0284C7]" />
+                  Form-C
+                </span>
+              </div>
+
+              <div className="my-3">
+                <div className="font-mono text-3xl font-extrabold text-[#101828]">
+                  {stats.totalForeigners ?? 0}
+                </div>
+                <div className="text-xs font-semibold text-[#12B76A] mt-1">
+                  Passport KYC audited
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#667085]">
+                International guest compliance records
+              </p>
+            </div>
+          )}
+
           {/* CARD 4 (col-2, row-2): WEEKLY CHECK-INS BAR CHART */}
           <div className="md:col-span-2 row-span-2 bg-white rounded-[16px] border border-[#EAECF0] p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div className="flex items-center justify-between mb-4">
@@ -345,36 +434,61 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-[#667085]">Monday – Sunday check-in distribution</p>
               </div>
               <span className="text-[11px] font-mono font-bold text-[#0284C7] bg-[#E0F2FE] px-2.5 py-1 rounded-full">
-                Peak: Saturday
+                {(() => {
+                  const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                  const counts: Record<string, number> = {};
+                  (stats.weeklyCheckins || []).forEach((w) => {
+                    counts[w.day_name] = (counts[w.day_name] || 0) + w.count;
+                  });
+                  let maxDay = "";
+                  let maxVal = 0;
+                  dayNames.forEach((d) => {
+                    if ((counts[d] || 0) > maxVal) {
+                      maxVal = counts[d] || 0;
+                      maxDay = d;
+                    }
+                  });
+                  return maxVal > 0 ? `Peak: ${maxDay} (${maxVal})` : "Peak: Current week";
+                })()}
               </span>
             </div>
 
             {/* 7 Bars (Mon–Sun) */}
             <div className="h-40 flex items-end justify-between gap-3 pt-4 px-2">
-              {[
-                { day: "Mon", height: "40%", count: 16 },
-                { day: "Tue", height: "65%", count: 26 },
-                { day: "Wed", height: "45%", count: 18 },
-                { day: "Thu", height: "85%", count: 34 },
-                { day: "Fri", height: "60%", count: 24 },
-                { day: "Sat", height: "95%", count: 38 },
-                { day: "Sun", height: "50%", count: 20 },
-              ].map((bar) => (
-                <div key={bar.day} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
-                  <span className="text-[10px] font-mono text-[#667085] opacity-0 group-hover:opacity-100 transition-opacity">
-                    {bar.count}
-                  </span>
-                  <div className="w-full bg-[#F2F4F7] rounded-lg h-full flex items-end overflow-hidden p-0.5">
-                    <div
-                      style={{ height: bar.height }}
-                      className="w-full bg-gradient-to-t from-[#0284C7] to-[#0EA5E9] rounded-md transition-all duration-300 group-hover:brightness-110 shadow-xs"
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-[#667085] font-semibold">
-                    {bar.day}
-                  </span>
-                </div>
-              ))}
+              {(() => {
+                const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                const counts: Record<string, number> = {};
+                (stats.weeklyCheckins || []).forEach((w) => {
+                  counts[w.day_name] = (counts[w.day_name] || 0) + w.count;
+                });
+                const maxCount = Math.max(...dayNames.map((d) => counts[d] || 0), 1);
+
+                return dayNames.map((day) => {
+                  const count = counts[day] || 0;
+                  const height = count === 0 ? "10%" : `${Math.max(16, Math.round((count / maxCount) * 100))}%`;
+
+                  return (
+                    <div key={day} className="flex-1 flex flex-col items-center gap-2 group h-full justify-end">
+                      <span className="text-[10px] font-mono text-[#667085] opacity-0 group-hover:opacity-100 transition-opacity">
+                        {count}
+                      </span>
+                      <div className="w-full bg-[#F2F4F7] rounded-lg h-full flex items-end overflow-hidden p-0.5">
+                        <div
+                          style={{ height }}
+                          className={`w-full rounded-md transition-all duration-300 group-hover:brightness-110 shadow-xs ${
+                            count > 0
+                              ? "bg-gradient-to-t from-[#0284C7] to-[#0EA5E9]"
+                              : "bg-[#E4E7EC]"
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-[#667085] font-semibold">
+                        {day}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -391,39 +505,56 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            <div className="space-y-3 divide-y divide-[#F2F4F7]">
-              {activities.slice(0, 5).map((act) => {
-                const dotColor =
-                  act.type === "checkin"
-                    ? "bg-[#12B76A]"
-                    : act.type === "checkout"
-                    ? "bg-[#0284C7]"
-                    : act.type === "qr_approved"
-                    ? "bg-[#7F56D9]"
-                    : act.type === "employee_added"
-                    ? "bg-[#F79009]"
-                    : "bg-[#0EA5E9]";
+            {activities.length === 0 ? (
+              <div className="py-12 text-center space-y-2 my-auto">
+                <div className="w-10 h-10 rounded-full bg-[#F2F4F7] text-[#98A2B3] flex items-center justify-center mx-auto">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <p className="text-xs text-[#667085]">
+                  No recent activity. Start by registering a customer.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 divide-y divide-[#F2F4F7]">
+                {activities.slice(0, 5).map((act) => {
+                  const dotColor =
+                    act.type === "checkin"
+                      ? "bg-[#12B76A]"
+                      : act.type === "checkout"
+                      ? "bg-[#0284C7]"
+                      : act.type === "qr_approved"
+                      ? "bg-[#7F56D9]"
+                      : act.type === "qr_pending"
+                      ? "bg-[#F79009]"
+                      : act.type === "employee_added"
+                      ? "bg-[#0EA5E9]"
+                      : "bg-[#0EA5E9]";
 
-                return (
-                  <div key={act.id} className="pt-2.5 first:pt-0 flex items-start gap-3">
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${dotColor}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-bold text-[#101828] truncate">
-                          {act.name}
+                  return (
+                    <div key={act.id} className="pt-2.5 first:pt-0 flex items-start gap-3">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 mt-1.5 ${dotColor}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-[#101828] truncate">
+                            {act.name}
+                          </p>
+                          <span className="text-[10px] font-mono text-[#98A2B3] shrink-0">
+                            {act.timestamp}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#667085] truncate">
+                          {act.detail}
                         </p>
-                        <span className="text-[10px] font-mono text-[#98A2B3] shrink-0">
-                          {act.timestamp}
-                        </span>
                       </div>
-                      <p className="text-[11px] text-[#667085] truncate">
-                        {act.detail}
-                      </p>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* CARD 6 (col-2 / col-span-1): QUICK ACTIONS (2x2 GRID, NO EMOJIS) */}
@@ -432,122 +563,180 @@ export default function DashboardPage() {
               QUICK ACTIONS
             </h3>
 
-            <div className="grid grid-cols-2 gap-2.5 flex-1">
-              {[
-                {
-                  label: "Add Customer",
-                  href: "/dashboard/add-customer",
-                  icon: (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <line x1="19" x2="19" y1="8" y2="14" />
-                      <line x1="22" x2="16" y1="11" y2="11" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: "Add Employee",
-                  href: "/dashboard/add-employee",
-                  icon: (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: "QR Approvals",
-                  href: "/dashboard/coming-soon",
-                  icon: (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect width="5" height="5" x="3" y="3" rx="1" />
-                      <rect width="5" height="5" x="16" y="3" rx="1" />
-                      <rect width="5" height="5" x="3" y="16" rx="1" />
-                      <path d="m21 16-4 4-2-2" />
-                    </svg>
-                  ),
-                },
-                {
-                  label: "Generate QR",
-                  href: "/dashboard/coming-soon",
-                  icon: (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {!visibility.customer && !visibility.employee ? (
+              <div className="grid grid-cols-2 gap-2.5 flex-1">
+                <Link
+                  href="/dashboard/generate-qr"
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#EAECF0] bg-[#F7F8FA] hover:bg-[#E0F2FE] hover:border-[#0284C7] hover:-translate-y-0.5 transition-all text-[#101828] shadow-xs group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center text-[#0284C7] group-hover:bg-[#0284C7] group-hover:text-white transition-colors mb-2">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect width="5" height="5" x="3" y="3" rx="1" />
                       <rect width="5" height="5" x="16" y="3" rx="1" />
                       <rect width="5" height="5" x="3" y="16" rx="1" />
                       <path d="M21 16v5" />
                       <path d="M18.5 18.5h5" />
                     </svg>
-                  ),
-                },
-              ].map((btn) => (
-                <Link
-                  key={btn.label}
-                  href={btn.href}
-                  className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-[#EAECF0] bg-[#F7F8FA] hover:bg-[#E0F2FE] hover:border-[#0284C7] hover:-translate-y-0.5 transition-all text-[#101828] shadow-xs group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center text-[#0284C7] group-hover:bg-[#0284C7] group-hover:text-white transition-colors mb-1.5">
-                    {btn.icon}
                   </div>
-                  <span className="text-[11px] font-semibold tracking-tight text-center">
-                    {btn.label}
-                  </span>
+                  <span className="text-xs font-bold text-center">Generate QR</span>
+                  <span className="text-[10px] text-[#667085] text-center mt-0.5">Counter pass</span>
                 </Link>
-              ))}
-            </div>
+
+                <Link
+                  href="/dashboard/qr-pending"
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-[#EAECF0] bg-[#F7F8FA] hover:bg-[#E0F2FE] hover:border-[#0284C7] hover:-translate-y-0.5 transition-all text-[#101828] shadow-xs group"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center text-[#0284C7] group-hover:bg-[#0284C7] group-hover:text-white transition-colors mb-2">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="5" height="5" x="3" y="3" rx="1" />
+                      <rect width="5" height="5" x="16" y="3" rx="1" />
+                      <rect width="5" height="5" x="3" y="16" rx="1" />
+                      <path d="m21 16-4 4-2-2" />
+                    </svg>
+                  </div>
+                  <span className="text-xs font-bold text-center">View QR Approvals</span>
+                  <span className="text-[10px] text-[#667085] text-center mt-0.5">Pending passes</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5 flex-1">
+                {[
+                  ...(visibility.customer
+                    ? [
+                        {
+                          label: "Add Customer",
+                          href: "/dashboard/add-customer",
+                          icon: (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                              <circle cx="9" cy="7" r="4" />
+                              <line x1="19" x2="19" y1="8" y2="14" />
+                              <line x1="22" x2="16" y1="11" y2="11" />
+                            </svg>
+                          ),
+                        },
+                      ]
+                    : []),
+                  ...(visibility.employee
+                    ? [
+                        {
+                          label: "Add Employee",
+                          href: "/dashboard/add-employee",
+                          icon: (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
+                              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                            </svg>
+                          ),
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "QR Approvals",
+                    href: "/dashboard/qr-pending",
+                    icon: (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1" />
+                        <rect width="5" height="5" x="16" y="3" rx="1" />
+                        <rect width="5" height="5" x="3" y="16" rx="1" />
+                        <path d="m21 16-4 4-2-2" />
+                      </svg>
+                    ),
+                  },
+                  {
+                    label: "Generate QR",
+                    href: "/dashboard/generate-qr",
+                    icon: (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="5" height="5" x="3" y="3" rx="1" />
+                        <rect width="5" height="5" x="16" y="3" rx="1" />
+                        <rect width="5" height="5" x="3" y="16" rx="1" />
+                        <path d="M21 16v5" />
+                        <path d="M18.5 18.5h5" />
+                      </svg>
+                    ),
+                  },
+                ].map((btn) => (
+                  <Link
+                    key={btn.label}
+                    href={btn.href}
+                    className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-[#EAECF0] bg-[#F7F8FA] hover:bg-[#E0F2FE] hover:border-[#0284C7] hover:-translate-y-0.5 transition-all text-[#101828] shadow-xs group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[#EAECF0] flex items-center justify-center text-[#0284C7] group-hover:bg-[#0284C7] group-hover:text-white transition-colors mb-1.5">
+                      {btn.icon}
+                    </div>
+                    <span className="text-[11px] font-semibold tracking-tight text-center">
+                      {btn.label}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* CARD 7 (col-2 / col-span-1): COMPLIANCE SCORE */}
-          <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-[0.05em] text-[#667085] mb-2">
-              COMPLIANCE SCORE
-            </h3>
+          {(() => {
+            const total = stats.totalVisitors || 0;
+            const verified = stats.totalVisitorsWithQr || 0;
+            const score = total > 0 ? Math.min(100, Math.round((verified / total) * 100)) : 0;
+            const circumference = 213.63;
+            const strokeOffset = circumference - (circumference * score) / 100;
+            const strokeColor = score >= 80 ? "#12B76A" : score >= 50 ? "#F79009" : "#D92D20";
+            const ratingText = score >= 80 ? "Excellent" : score >= 50 ? "Moderate" : "Needs Attention";
+            const ratingDesc = score >= 80 ? "All records compliant" : score >= 50 ? "Partially verified" : "Action required";
 
-            <div className="flex items-center gap-4 my-auto">
-              {/* SVG Ring Gauge (80px diameter, 34 radius, 6 stroke) */}
-              <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
-                <svg className="w-20 h-20 -rotate-90">
-                  <circle
-                    cx="40"
-                    cy="40"
-                    r="34"
-                    fill="none"
-                    stroke="#F2F4F7"
-                    strokeWidth="6"
-                  />
-                  <circle
-                    cx="40"
-                    cy="40"
-                    r="34"
-                    fill="none"
-                    stroke="#12B76A"
-                    strokeWidth="6"
-                    strokeDasharray="213.63"
-                    strokeDashoffset="32.04"
-                    strokeLinecap="round"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                <span className="absolute font-mono text-base font-extrabold text-[#101828]">
-                  85%
-                </span>
-              </div>
+            return (
+              <div className="bg-white rounded-[16px] border border-[#EAECF0] p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-[0.05em] text-[#667085] mb-2">
+                  COMPLIANCE SCORE
+                </h3>
 
-              {/* Right Descriptions */}
-              <div className="space-y-0.5">
-                <p className="text-[13px] font-bold text-[#101828]">Excellent</p>
-                <p className="text-[11px] text-[#667085]">All records compliant</p>
-                <p className="text-[11px] font-semibold text-[#12B76A]">
-                  ↑ 3% improvement
+                <div className="flex items-center gap-4 my-auto">
+                  {/* SVG Ring Gauge (80px diameter, 34 radius, 6 stroke) */}
+                  <div className="relative w-20 h-20 shrink-0 flex items-center justify-center">
+                    <svg className="w-20 h-20 -rotate-90">
+                      <circle
+                        cx="40"
+                        cy="40"
+                        r="34"
+                        fill="none"
+                        stroke="#F2F4F7"
+                        strokeWidth="6"
+                      />
+                      <circle
+                        cx="40"
+                        cy="40"
+                        r="34"
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth="6"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={strokeOffset}
+                        strokeLinecap="round"
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </svg>
+                    <span className="absolute font-mono text-base font-extrabold text-[#101828]">
+                      {score}%
+                    </span>
+                  </div>
+
+                  {/* Right Descriptions */}
+                  <div className="space-y-0.5">
+                    <p className="text-[13px] font-bold text-[#101828]">{ratingText}</p>
+                    <p className="text-[11px] text-[#667085]">{ratingDesc}</p>
+                    <p className="text-[11px] font-semibold text-[#0284C7]">
+                      {verified} / {total} QR Verified
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-[#98A2B3] mt-2">
+                  Statutory verification score
                 </p>
               </div>
-            </div>
-
-            <p className="text-[10px] text-[#98A2B3] mt-2">
-              Statutory verification score
-            </p>
-          </div>
+            );
+          })()}
         </div>
 
         {/* FULL-WIDTH CARD: RECENT VISITOR LOGS TABLE WITH EXPANDABLE ROWS */}
@@ -781,7 +970,7 @@ export default function DashboardPage() {
 
                 <Link
                   href="/dashboard/coming-soon"
-                  className="px-4 py-2 bg-white border border-[#D0D5DD] hover:bg-gray-50 text-[#344054] text-xs font-semibold rounded-xl shadow-2xs transition-colors inline-flex items-center gap-1.5"
+                  className="px-4 py-2 bg-white border border-[#D0D5DD] hover:bg-gray-50 text-[#344054] text-xs font-semibold rounded-xl shadow-xs hover:shadow-sm transition-all inline-flex items-center gap-1.5"
                 >
                   <svg className="w-3.5 h-3.5 text-[#667085]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect width="5" height="5" x="3" y="3" rx="1" />

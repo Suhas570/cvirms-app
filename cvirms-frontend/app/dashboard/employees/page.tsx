@@ -2,7 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getModuleVisibility } from "@/lib/establishmentTypes";
 
 interface Employee {
   id: number;
@@ -22,6 +25,15 @@ interface Employee {
 }
 
 export default function EmployeeListPage() {
+  const router = useRouter();
+  const { user, loading: userLoading } = useCurrentUser();
+  const visibility = getModuleVisibility(user?.member_type);
+
+  useEffect(() => {
+    if (!userLoading && !visibility.employee) {
+      router.replace("/dashboard");
+    }
+  }, [userLoading, visibility.employee, router]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -149,6 +161,10 @@ export default function EmployeeListPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (!userLoading && !visibility.employee) {
+    return null;
+  }
 
   return (
     <DashboardLayout>
