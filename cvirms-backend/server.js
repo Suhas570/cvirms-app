@@ -46,12 +46,22 @@ const guestRoutes = require('./routes/guests');
 const employeeRoutes = require('./routes/employees');
 const foreignerRoutes = require('./routes/foreigners');
 const ocrRoutes = require('./routes/ocr');
+const qrRoutes = require('./routes/qr');
+const noticeRoutes = require('./routes/notices');
+const profileRoutes = require('./routes/profile');
+const registerRoutes = require('./routes/register');
+const policeRoutes = require('./routes/police');
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/guests', guestRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/foreigners', foreignerRoutes);
 app.use('/api/ocr', ocrRoutes);
+app.use('/api/qr', qrRoutes);
+app.use('/api/notices', noticeRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/register', registerRoutes);
+app.use('/api/police', policeRoutes);
 
 
 // Health Check Route

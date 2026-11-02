@@ -116,3 +116,58 @@
 4. **Phone Field Exemption:** Contact Number (Phone) strictly remains blank/manual for verification.
 5. **Aadhaar Format:** Aadhaar number automatically formatted into 12 digits (`XXXX XXXX XXXX`) with client-side Luhn-like validation.
 
+## Day 8 - October 15, 2026
+**Backend:** Built /api/qr endpoints — my-qr, pending, approve/:id, reject/:id, hotel/:token (public), public-register/:token (public). Added qr_token + qr_generated_at to users table.
+**Frontend:** Built Generate QR page (with download + print), Public Visitor Scan page (/scan/[token], no auth, glassmorphism), Pending QR Approvals page (approve/reject with toast). Updated Visitor List with QR source badges.
+**Integration:** Full QR lifecycle works — generate → scan → self-register → approve → appears in Visitor List.
+
+## Day 9 - October 15, 2026
+**Backend:** Built /api/notices (current + archived), /api/profile (GET + PUT), updated /api/dashboard/stats to use real DB queries. Added /api/dashboard/recent-activity.
+**Frontend:** Built Notices page (tabs + view modal + empty states). Built Profile page (avatar card + edit form + Settings + Help cards). Wired profile dropdown navigation. Updated Dashboard to show real stats and real activity feed.
+**Integration:** Full flow works — notices render, profile updates reflect in sidebar, dashboard stats update when new customer added.
+
+## Day 10 - October 15, 2026
+**Backend:** Built /api/register endpoints (initiate, verify-payment, check-username). Added username+password login endpoint (/api/auth/login-username). Added users table columns for registration + payment tracking. WhatsApp delivery MOCKED.
+**Frontend:** Added register link to login page. Built /register form page (establishment + owner + address + pricing). Built /register/payment page (order summary + mock payment methods). Built /register/success page with ReceiptPrinter component (dark card + printer slot + jagged receipt + animated checkmark + barcode). Credentials card with copy buttons. Login page now has OTP/Password tabs.
+**Integration:** Full self-registration flow works — form → payment → receipt animation → credentials → login with password.
+
+## Day 11 - October 15, 2026
+**Feature:** Added role-based module visibility. Created establishmentTypes.ts config (11 types). Updated Sidebar to conditionally show modules based on user.member_type. Updated Dashboard Bento Grid + Quick Actions per type. Added route guards (redirect if user's type doesn't have module). Added "Establishment Type" badge to sidebar footer.
+
+## Day 12 - October 15, 2026
+**Feature:** Added customer sub-types for Jewellery (Seller/Pledger) and Vehicle Dealer (Buyer/Seller). Sub-type selector appears only for these two types. Extra fields (weight, purity, loan amount, vehicle details) render conditionally based on sub-type. Visitor List shows sub-type badges. DB updated with 10 new columns for sub-type-specific data.
+
+## Day 13 - October 16, 2026
+**Feature:** Added Karnataka-specific cascading location selector to registration form. Created karnatakaLocations.ts with all 31 districts, their taluks, and police stations. State is fixed to Karnataka. District → Taluka → Police Station cascade works. Added Landmark + Full Address fields. Pincode validated against Karnataka range (5xxxxx). DB updated with district, taluka, police_station, landmark, full_address columns.
+
+
+## Day 14 - October 31, 2026
+**Police Portal:** Built Police Login (RBAC), Police Sidebar (Dark theme), and Police Global Dashboard. Added `/api/police/stats` for city-wide metrics. Enforced `requireRole('police')` on backend routes.
+
+
+## Day 15 - October 31, 2026
+**Police Portal (Light Theme & Master Directory):**
+- **Theme Alignment:** Re-engineered the Police Portal to strictly follow the CVIRMS Master Design Template — Light Theme with pure white sidebar, Sky Blue accents (#0EA5E9, #0284C7), #EAECF0 borders, and soft shadows.
+- **Database & Types:** Seeded police officer Inspector Kumar with password hash for '123456'. Extended `member_type` enum and `establishmentTypes.ts` with `housing_society` (mapped to customer only).
+- **Backend Police Routes:** Enforced `verifyToken` and `requireRole('police')`. Updated `/api/police/stats` to aggregate category metrics (totalPgs, totalHotels, totalOrgs, totalSocieties, totalJewellery, totalVisitors). Built `/api/police/establishments` returning all member units with subqueried total visitor counts.
+- **Frontend Architecture:**
+  - `app/police/login/page.tsx`: Light theme glassmorphic login card with strict client-side role check against unauthorized members.
+  - `components/PoliceSidebar.tsx`: White light sidebar matching member portal layout with 10 law enforcement navigation items and red Police Admin badge in topbar.
+  - `app/police/dashboard/page.tsx`: Light Bento Grid with 6 category metric cards and surveillance quick actions.
+  - `app/police/establishments/page.tsx`: Master Establishment Directory with live multi-field search, type filter pills, visitor count pills, and detail inspection modal.
+- **Verification:** Verified RBAC blocks (403 for members), police login authentication, route guard redirects from `/dashboard` to `/police/dashboard`, and successful Next.js production build.
+
+## Day 16 - October 31, 2026
+**Police Portal (Legacy Sidebar Links, URL Filtering & Reports Placeholder):**
+- **Sidebar Integration:** Updated `components/PoliceSidebar.tsx` with all 16 legacy links in exact order (Dashboard, City Visitors Search, CVIRMS Member Search, Report, PG's, Hotel/Lodge, Organization, Society Details, Scrap Merchants, Jewellery, Police Station Info, Add Flag, All Flag, My Alert, Add Notice, All Notices). Added active query parameter matching so filter items are highlighted precisely.
+- **Backend Query Filtering:** Updated `routes/police.js` (`GET /api/police/establishments`) to accept `?type=` query parameter and dynamically filter SQL by `u.member_type` (handling composite `'hotel'` and `'lodge'` hospitality types).
+- **Directory URL Synchronization:** Updated `app/police/establishments/page.tsx` with `useSearchParams` to synchronize state with URL query parameters, dynamic heading ("PG Directory", "Jewellery Directory", etc.), and wrapped in `<Suspense>`.
+- **Reports Placeholder:** Built `app/police/reports/page.tsx` with "City Analytics & Reports" shell scheduled for Prompt 17.
+- **Automated QA Verification:** Executed headless Chrome DevTools test confirming sidebar clicks navigate to filtered URLs (`?type=pg`, `?type=jewellery`, `/police/reports`), table updates with correct establishment types, and 0 console errors.
+
+## Day 17 - November 2, 2026
+**UI/UX Master Template Enterprise Polish:**
+- **Design Audit & Standardization:** Conducted Impeccable UI audit across 8 key files. Normalized card shadows (`shadow-xs`, `shadow-sm`, `hover:shadow-md`), unified input focus rings (`focus:ring-2 focus:ring-[#0EA5E9]/20`), removed non-standard `shadow-2xs` classes, and refined table row dividers (`divide-y divide-gray-100`).
+- **Sidebar Polish:** Aligned Member and Police sidebars to enterprise standard active states (`bg-[#F0F9FF] text-[#0284C7] font-semibold border-l-2 border-[#0EA5E9]`).
+- **Glassmorphism Sharpness:** Replaced arbitrary inline styles in `login/page.tsx` and `register/page.tsx` with sharp `backdrop-blur-xl border-white/80 shadow-xl shadow-sky-900/5` containers.
+- **Responsive QA Testing:** Ran automated Chrome DevTools/CDP test across Desktop (1440px), Tablet (768px), and Mobile (375px) viewports for 6 primary user flows (Member Dashboard, Police Dashboard, Visitor List, Add Customer, Login, Register). Confirmed 100% pass with 0 horizontal overflow and 0 console errors.

@@ -26,7 +26,28 @@ router.post('/', async (req, res) => {
     check_in_date,
     check_out_date,
     purpose_of_visit,
+    customer_sub_type,
+    item_description,
+    item_weight,
+    item_purity,
+    item_amount,
+    loan_amount,
+    pledge_duration_days,
+    vehicle_type,
+    vehicle_registration,
+    vehicle_make_model,
   } = req.body;
+
+  // Resolve establishment member_type
+  let memberType = req.user && req.user.member_type;
+  if (!memberType) {
+    try {
+      const u = await db.query('SELECT member_type FROM users WHERE id = $1', [req.user.id]);
+      memberType = u.rows[0]?.member_type;
+    } catch {}
+  }
+  memberType = (memberType || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+  const isSpecialEstablishment = memberType === 'jewellery' || memberType === 'vehicle_dealer';
 
   // Field-level validation
   const errors = {};
@@ -39,8 +60,21 @@ router.post('/', async (req, res) => {
   }
   if (!id_proof_type || !id_proof_type.trim()) errors.id_proof_type = 'ID proof type is required';
   if (!id_proof_number || !id_proof_number.trim()) errors.id_proof_number = 'ID proof number is required';
-  if (!room_number || !room_number.trim()) errors.room_number = 'Room number is required';
+  if (!isSpecialEstablishment && (!room_number || !room_number.trim())) {
+    errors.room_number = 'Room number is required';
+  }
   if (!check_in_date) errors.check_in_date = 'Check-in date is required';
+
+  // Sub-type validations per establishment type
+  if (memberType === 'jewellery') {
+    if (!customer_sub_type || !['seller', 'pledger'].includes(customer_sub_type.toLowerCase())) {
+      errors.customer_sub_type = 'Customer sub-type must be either seller or pledger';
+    }
+  } else if (memberType === 'vehicle_dealer') {
+    if (!customer_sub_type || !['buyer', 'seller'].includes(customer_sub_type.toLowerCase())) {
+      errors.customer_sub_type = 'Customer sub-type must be either buyer or seller';
+    }
+  }
 
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({
@@ -57,6 +91,9 @@ router.post('/', async (req, res) => {
   const guestCount = parseInt(number_of_guests, 10) || 1;
   const checkIn = new Date(check_in_date);
   const checkOut = check_out_date ? new Date(check_out_date) : null;
+  const finalRoomNumber = room_number && room_number.trim()
+    ? room_number.trim()
+    : (isSpecialEstablishment ? 'Counter 1' : '101');
 
   try {
     const insertQuery = `
@@ -71,9 +108,23 @@ router.post('/', async (req, res) => {
         check_in_date,
         check_out_date,
         purpose_of_visit,
+        customer_sub_type,
+        item_description,
+        item_weight,
+        item_purity,
+        item_amount,
+        loan_amount,
+        pledge_duration_days,
+        vehicle_type,
+        vehicle_registration,
+        vehicle_make_model,
         qr_code_string,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NOW())
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+        NULL, NOW()
+      )
       RETURNING *;
     `;
 
@@ -84,10 +135,20 @@ router.post('/', async (req, res) => {
       guestCount,
       id_proof_type.trim(),
       id_proof_number.trim(),
-      room_number.trim(),
+      finalRoomNumber,
       checkIn,
       checkOut,
       purpose_of_visit ? purpose_of_visit.trim() : null,
+      customer_sub_type ? customer_sub_type.toLowerCase().trim() : null,
+      item_description ? item_description.trim() : null,
+      item_weight ? parseFloat(item_weight) : null,
+      item_purity ? item_purity.trim() : null,
+      item_amount ? parseFloat(item_amount) : null,
+      loan_amount ? parseFloat(loan_amount) : null,
+      pledge_duration_days ? parseInt(pledge_duration_days, 10) : null,
+      vehicle_type ? vehicle_type.trim() : null,
+      vehicle_registration ? vehicle_registration.trim().toUpperCase() : null,
+      vehicle_make_model ? vehicle_make_model.trim() : null,
     ];
 
     const result = await db.query(insertQuery, values);

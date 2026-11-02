@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const svgCaptcha = require('svg-captcha');
 const rateLimit = require('express-rate-limit');
 const db = require('../db');
+const bcrypt = require('bcryptjs');
 const { verifyToken } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -423,4 +424,97 @@ router.get('/me', verifyToken, async (req, res) => {
   }
 });
 
+/**
+ * 5. POST /api/auth/login-username
+ * Login with username and temporary password (or permanent password)
+ */
+router.post('/login-username', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !username.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and password are required.',
+      });
+    }
+
+    const cleanUsername = username.trim();
+
+    // Query user by username or user_id
+    const result = await db.query(
+      `SELECT id, name, email, phone, user_id, username, role, member_type, password_hash, temp_password_hash, is_verified, payment_status 
+       FROM users 
+       WHERE LOWER(username) = LOWER($1) OR LOWER(user_id) = LOWER($1) 
+       LIMIT 1`,
+      [cleanUsername]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or password.',
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password_hash && !user.temp_password_hash) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or password. Password login not set up for this account.',
+      });
+    }
+
+    const hashToCompare = user.password_hash || user.temp_password_hash;
+    const isMatch = await bcrypt.compare(password, hashToCompare);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or password.',
+      });
+    }
+
+    // TODO: Force password change on first login (future feature)
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        user_id: user.user_id || user.username,
+        role: user.role,
+        member_type: user.member_type,
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    const userPayload = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      user_id: user.user_id || user.username,
+      username: user.username,
+      role: user.role,
+      member_type: user.member_type,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: userPayload,
+    });
+  } catch (error) {
+    console.error('[Login Username Error]:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Authentication failed due to internal error.',
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;
+
